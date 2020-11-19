@@ -24,3 +24,4 @@ lipidomics_data <- read_xlsx("data/_raw/clp_lipidomics_data_clean.xlsx") %>%
 # Load metabolomics data from excel file ----------------------------------------------------
 metabolomics_data <- read_xlsx("data/_raw/hd4_metabolomics_data.xlsx", sheet = 3) %>%
   write_csv("data/01_metabolomics_data.csv")
+

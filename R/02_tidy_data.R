@@ -22,7 +22,7 @@ metabolomics_data <- read_csv("data/01_metabolomics_data.csv")
 # Combine the "ID" col with the "Condition" col
 clinical_data_modified <- as_tibble(clinical_data) %>%
   select(SUBJECT_ID, CONDITION, everything()) %>% 
-  unite(col = "ID_Condition", "SUBJECT_ID":"CONDITION", sep = "_", remove = TRUE, na.rm = TRUE)
+  unite(col = "ID_Condition", "SUBJECT_ID":"CONDITION", sep = "_", remove = FALSE, na.rm = TRUE)
 
 
 
