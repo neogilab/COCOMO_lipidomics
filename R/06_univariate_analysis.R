@@ -45,7 +45,8 @@ HIV_MetS <- lipidomics_data %>%
   #filter(GENDER == "Male")
 
 # Filter data set to contain measures for HIVnomets and HIVmets
-HIVnomets_HIVmets <- lipidomics_data
+HIVnomets_HIVmets <- lipidomics_data  %>% 
+  filter(!str_detect(Condition, "Ctrl"))
   #filter(GENDER == "Male")
 
 
@@ -152,7 +153,7 @@ stats_HIV_limma <- topTable(fit, sort.by = "P", n = Inf)
 # Write toptable to file
 stats_HIV_limma_df <- rownames_to_column(stats_HIV_limma, "Biochemicals")
 stats_HIV_limma_df <- merge(x = stats_HIV_limma_df, 
-                              y = as.data.frame(lipidomics_data_kegg_hmdb))
+                              y = as.data.frame(lipidomics_info))
 write_csv(stats_HIV_limma_df, "data/06_limmatest_HIV.csv")
 
 
@@ -249,3 +250,4 @@ save(method_list_univariate, file="data/06_methods_univariate.RData")
  #                                y = as.data.frame(met_lip_data_kegg_hmdb),
  #                                by = "Biochemicals")
 #write_csv(stats_HIV_limma_met_lip, "data/06_limmatest_HIV_met_lip.csv")
+

@@ -19,9 +19,9 @@ cut_off    <- 0.7
 
 
 # Load data ---------------------------------------------------------------
-c1_enrich <- read_csv("data/LIONweb/c1_LION/c1_LION-enrichment.csv")
-c2_enrich <- read_csv("data/LIONweb/c2_LION/c2_LION-enrichment.csv")
-c3_enrich <- read_csv("data/LIONweb/c3_LION/c3_LION-enrichment.csv")
+c1_enrich <- read_csv("data/LIONweb/c1/LION-enrichment-job1.csv")
+c2_enrich <- read_csv("data/LIONweb/c2/LION-enrichment-job1.csv")
+c3_enrich <- read_csv("data/LIONweb/c3/LION-enrichment-job1.csv")
 
 
 # Bar plots --------------------------------------------------------------------
@@ -32,7 +32,7 @@ c1_plot <- c1_enrich %>%
              y = `Log10 adjusted p-value (FDR)`, 
              fill = `Log10 adjusted p-value (FDR)`)) +
   geom_bar(stat = "identity", alpha = .9, width = .4) +
-  scale_fill_gradient(low = "grey", high = "green") +
+  scale_fill_gradient(low = "grey", high = "skyblue") +
   coord_flip() +
   geom_abline(slope=0, intercept = log_thres,  col = "grey", lty = 1.5) +
   xlab("") +
@@ -66,7 +66,7 @@ c3_plot <- c3_enrich %>%
              y = `Log10 adjusted p-value (FDR)`, 
              fill = `Log10 adjusted p-value (FDR)`)) +
   geom_bar(stat = "identity", alpha = .9, width = .4) +
-  scale_fill_gradient(low = "grey", high = "green") +
+  scale_fill_gradient(low = "grey", high = "red") +
   coord_flip() +
   geom_abline(slope=0, intercept = log_thres,  col = "grey", lty = 1.5) +
   xlab("") +

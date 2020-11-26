@@ -16,7 +16,6 @@ library(randomForest)
 library(devtools)       # For MVUR
 library(doParallel)     # Parallel processing (install.packages("doParallel", repos="http://R-Forge.R-project.org") )
 library(MUVR)           # Multivariate modelling (install_git("https://gitlab.com/CarlBrunius/MUVR.git"))
-library(caret)          # For function "createDataPartition"
 library(plotROC)    
 
 # Variables
@@ -97,13 +96,17 @@ sign_lipids_HIV_plsda <- subset(lipid_plsda_vipvn_df_order$Lipids, lipid_plsda_v
 # MVUR = Multivariate methods with Unbiased Variable selection
 # Method used when few observations and a large number of variables
 
+# Filter out the control group
+lipidomics_data_tidy_HIV <- lipidomics_data_tidy %>% 
+  filter(!str_detect(Condition, "Ctrl")) 
+
 # Create "condition" factor with two levels "HIV_MetS" and "HIV_NoMetS"
-condition_fac <- as.factor(lipidomics_data_tidy$Condition)
+condition_fac <- as.factor(lipidomics_data_tidy_HIV$Condition)
 
 # Set method parameters, for parallel processing
 nCore=detectCores()-1   # Number of processor threads to use, uses all but one thread
 nRep=nCore              # Number of MUVR repetitions, usally between 20 and 50 
-nOuter=8                # Number of outer cross-validation segments, usally between 6 and 8. Higher number when fewer observations –> increase number of observations in the model training
+nOuter=8                # Number of outer cross-validation segments, usally between 6 and 8. Higher number when fewer observations ???> increase number of observations in the model training
 varRatio=0.8            # Proportion of variables kept per iteration, usally start out low 0.75 and increase towards 0.85-0.9 for final processing 
 method='RF'             # Selected core modelling algorithm to Random Forest
 
@@ -114,7 +117,7 @@ registerDoParallel(cl)
 # OBS: hard to set seed for reproducibility, as it is parallel processing 
 
 # Perform modelling
-classModel = MUVR(X=lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)], 
+classModel = MUVR(X=lipidomics_data_tidy_HIV[, 4:ncol(lipidomics_data_tidy_HIV)], 
                   Y=condition_fac, 
                   nRep=nRep, 
                   nOuter=nOuter, 
@@ -154,6 +157,8 @@ cm <- classModel$Fit$rfFitMid$confusion
   #theme(plot.title = element_text(hjust = 0.5)) +
   #annotate("text", x = .75, y = .25, label = paste("AUC =", round(classModel$auc[2,1], 3)))
 ##rocplot
+
+
 
 
 

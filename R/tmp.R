@@ -255,3 +255,62 @@ method_list_supervised <- list('PLS-DA with "ropls"' = sign_lipids_HIV_plsda,
 
 # Save list to a file
 save(method_list_supervised, file="data/05_methods_supervised.RData")
+
+
+
+# Data distribution  ------------------------------------------------------
+
+# Distribution box plot log base 2 transformed ------------------------------------------------------------
+# Significant lipids, move to another script!!
+##sign_lipids_plot <- pivot_lipidomics_data %>% 
+##filter(Lipid == c("TAG54:4-FA16:0"), !Condition == "Ctrl") %>% 
+##ggplot(mapping = aes(x = log2(Concentrations), fill = Condition)) + 
+##geom_boxplot(alpha = 0.5) + 
+##coord_flip() + 
+##labs(title = 'Boxplot of "TAG54:4-FA16:0" lipid concentration', 
+##   x = 'Log2 of lipid concentrations') + 
+##scale_fill_discrete(name="Condition") #+   
+# facet_wrap(~ Lipid) 
+##ggsave("results/03_boxplot_significant_lipids.png", plot = sign_lipids_plot, device = "png", width = 6.17, height = 3.1)
+
+
+
+
+# Distribution plots for lipid CE(12:00) -------------------------------------------------------------
+# Distribution density plot
+ggplot(data = lipidomics_data, mapping = aes(x = lipidomics_data$`CE(12:0)`, fill = lipidomics_data$Condition)) + 
+  geom_density(alpha = 0.5) + 
+  labs(title = 'Distribution of "CE(12:0)" between three condition groups', x = 'Abundance of "CE(12:0)"') + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("Ctrl", "HIV_NoMetS", "HIV_MetS"),
+                      labels=c("Control", "HIV without MetS", "HIV with MetS"))
+
+# Distribution density plot log base 2 transformed 
+lipidomics_data %>% 
+  ggplot(mapping = aes(x = log2(lipidomics_data$`CE(12:0)`), fill = lipidomics_data$Condition)) + 
+  geom_density(alpha = 0.5) + 
+  labs(title = 'Distribution of "CE(12:0)" between three condition groups', x = 'Log base 2 abundance of "CE(12:0)"') + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("Ctrl", "HIV_NoMetS", "HIV_MetS"),
+                      labels=c("Control", "HIV without MetS", "HIV with MetS"))
+
+# Distribution box plot log base 2 transformed 
+lipidomics_data %>% 
+  ggplot(mapping = aes(x = log2(lipidomics_data$`CE(12:0)`), fill = lipidomics_data$Condition)) + 
+  geom_boxplot(alpha = 0.5) + 
+  coord_trans() + 
+  labs(title = 'Distribution of "CE(12:0)" between three condition groups', x = 'Log base 2 abundance of "CE(12:0)"') + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("Ctrl", "HIV_NoMetS", "HIV_MetS"),
+                      labels=c("Control", "HIV without MetS", "HIV with MetS"))
+
+# Distribution histogram log base 2 transformed 
+ggplot(data = lipidomics_data, mapping = aes(x = log2(lipidomics_data$`CE(12:0)`), fill = lipidomics_data$Condition)) + 
+  geom_histogram(alpha = 0.5) + 
+  facet_wrap(~ Condition) + 
+  labs(title = 'Distribution of "CE(12:0)" between three condition groups', x = 'Log base 2 abundance of "CE(12:0)"') + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("Ctrl", "HIV_NoMetS", "HIV_MetS"),
+                      labels=c("Control", "HIV without MetS", "HIV with MetS"))
+
+

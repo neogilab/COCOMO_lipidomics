@@ -17,7 +17,7 @@ load("data/05_methods_supervised.RData")
 load("data/06_methods_univariate.RData")
 
 # Load lipidomics data 
-lipidomics_data_tidy <- read_csv("data/02_lipidomics_data_tidy.csv")
+lipidomics_data_tidy <- read_csv("data/02_lipidomics_data_tidy.csv") %>% filter(!str_detect(Condition, "Ctrl"))
 
 # Concatenate imported lists
 method_list <- c(method_list_univariate, method_list_supervised)
@@ -75,7 +75,7 @@ sign_lipids_plot <- pivot_lipidomics_data_tidy %>%
 
 
 sign_lipids_plot
-ggsave("results/07_boxplot_significant_lipids.png", plot = sign_lipids_plot, device = "png")
+ggsave("results/07_boxplot_significant_lipids.png", plot = sign_lipids_plot, device = "png", height = 8)
 
 
 # PCA of significant lipids ---------------------------
