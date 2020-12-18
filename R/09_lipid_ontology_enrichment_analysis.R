@@ -22,6 +22,7 @@ cut_off    <- 0.7
 c1_enrich <- read_csv("data/LIONweb/c1/LION-enrichment-job1.csv")
 c2_enrich <- read_csv("data/LIONweb/c2/LION-enrichment-job1.csv")
 c3_enrich <- read_csv("data/LIONweb/c3/LION-enrichment-job1.csv")
+network_table <- read_csv("data/08_cytoscape_pos_table_FDR.csv")
 
 
 # Bar plots --------------------------------------------------------------------
@@ -79,3 +80,15 @@ c3_plot <- c3_enrich %>%
 # Save enrichment plots
 ggsave("results/09_LION_enrichmentplot_c1_c2.png", plot = c1_plot / c2_plot , device = "png")
 ggsave("results/09_LION_enrichmentplot_c3.png"   , plot = c3_plot , device = "png", height = 10)
+
+
+
+# Degrees in the network --------------------------------------------------
+avg_degree <- network_table %>% 
+  group_by(community) %>% 
+  summarise_at(vars(-c(Biochemicals, logFC_limma, adj_pval_limma, Group, Super_pathway, sign_lip_met)), funs(round(mean(., na.rm=TRUE), 2)))
+
+individual_degree <- network_table %>% 
+  select(Biochemicals, degree, community) %>% 
+  arrange(desc(degree))
+

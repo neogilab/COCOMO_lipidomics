@@ -17,11 +17,11 @@ library(limma)
 
 # Variables ----------------------------------------------------
 # Mann Whitney: Thresholds for the log fold change and the adjusted pvalue
-log_thres <- 0.8
+log_thres <- 0.5
 pval_thres <- 0.001
 
 # Limma: Thresholds for the log fold change and the adjusted pvalue
-log_thres_limma <- 0.8
+log_thres_limma <- 0.5
 pval_thres_limma <- 0.001
 
 
@@ -90,12 +90,12 @@ write_csv(stats_HIV_MW, "data/06_MWtest_HIV.csv")
 #HIVnomets_HIVmets_sub = subset(stats_HIVnomets_HIVmets,abs(fclog2_HIVnomets_HIVmets) >= log_thres | pval_BH_HIVnomets_HIVmets < pval_thres)
 
 # Volcano plot with ggplot illustrating the significant abundance between HIVnomets vs. HIVmets
-mw_title <- substitute(paste("Thresholds: q-value < ", pval_thres, " and log2-value > ", log_thres, ". (HIV_NoMetS vs. HIV_MetS)", sep=""), list(pval_thres = pval_thres, log_thres = log_thres))
-volcano_mw <- ggplot(stats_HIVnomets_HIVmets, aes(x = fclog2_HIVnomets_HIVmets, 
-                                    y = -log10(pval_BH_HIVnomets_HIVmets),
-                                    color = ifelse(abs(fclog2_HIVnomets_HIVmets)>log_thres,"grey","forestgreen"))) +
+mw_title <- substitute(paste("Thresholds: q-value <= ", pval_thres, " and log2-value >= ", log_thres, ". (HIV_NoMetS vs. HIV_MetS)", sep=""), list(pval_thres = pval_thres, log_thres = log_thres))
+volcano_mw <- ggplot(stats_HIV_MW, aes(x = log2FC, 
+                                    y = -log10(adj_pvalue),
+                                    color = ifelse(abs(log2FC)>log_thres & adj_pvalue<pval_thres,"grey","forestgreen"))) +
   geom_point() +
-  xlim(-2, 2) +
+  xlim(-1.5, 1.5) +
   ylim(0, 16) + 
   xlab(expression("Fold Change, Log"[2]*"")) +  #(HIV_NoMetS vs. HIV_MetS)")) +
   ylab(expression("Benjamini-Hochberg adjusted p-value, Log"[10]*"")) +
@@ -143,7 +143,7 @@ group <- HIVnomets_HIVmets %>%
                                 TRUE ~ Condition))
 design <- cbind(Group = as.numeric(group$HIV_binary))
 
-# Fit model and compute t-statistics
+# Fit model and compute moderated t-statistics
 fit <- lmFit(lipid_df, design)
 fit <- eBayes(fit)
 
@@ -163,12 +163,12 @@ write_csv(stats_HIV_limma_df, "data/06_limmatest_HIV.csv")
 #limma_HIV_sub = subset(stats_HIV_limma,abs(stats_HIV_limma$logFC) >= log_thres_limma | stats_HIV_limma$adj.P.Val < pval_thres)
 
 # Volcano plot with ggplot illustrating the significant abundance between HIVnomets vs. HIVmets
-limma_title <- substitute(paste("Thresholds: q-value < ", pval_thres_limma, " and log2-value > ", log_thres_limma, ". (HIV_NoMetS vs. HIV_MetS)", sep=""), list(pval_thres_limma = pval_thres_limma, log_thres_limma = log_thres_limma))
+limma_title <- substitute(paste("Thresholds: q-value <= ", pval_thres_limma, " and log2-value >= ", log_thres_limma, ". (HIV_NoMetS vs. HIV_MetS)", sep=""), list(pval_thres_limma = pval_thres_limma, log_thres_limma = log_thres_limma))
 volcano_limma <- ggplot(stats_HIV_limma, aes(x = logFC,
                                              y = -log10(adj.P.Val),
-                                             color = ifelse(abs(logFC)>log_thres_limma,"grey","forestgreen"))) +
+                                             color = ifelse(abs(logFC)>log_thres_limma & adj.P.Val<pval_thres_limma,"grey","forestgreen"))) +
   geom_point() +
-  xlim(-2, 2) +
+  xlim(-1.5, 1.5) +
   ylim(0, 16) + 
   xlab(expression("Fold Change, Log"[2]*"")) +  #(HIV_NoMetS vs. HIV_MetS)")) +
   ylab(expression("Benjamini-Hochberg adjusted p-value, Log"[10]*"")) +
@@ -195,6 +195,7 @@ volcano_limma <- ggplot(stats_HIV_limma, aes(x = logFC,
   #        size = 3) +
   labs(title = "Volcano plot: limma test", 
        subtitle = limma_title) 
+volcano_limma
 ggsave("results/06_volcano_HIV_limma.png", plot = volcano_limma, device = "png") #, width = 6.17, height = 3.1)
 
 
@@ -204,8 +205,11 @@ ggsave("results/06_volcano_plots.png", plot = volcano_mw + volcano_limma, device
 
 
 # Significant lipids between HIV groups (lipidomics) ------------------------------------------------------
-sign_lipids_MW <- subset(stats_HIV_MW, stats_HIV_MW$adj_pvalue <= pval_thres)
+sign_lipids_MW <- subset(stats_HIV_MW, stats_HIV_MW$adj_pvalue <= pval_thres )
+#sign_lipids_MW <- subset(stats_HIV_MW, abs(stats_HIV_MW$log2FC) >= log_thres)
+
 sign_lipids_limma <- subset(stats_HIV_limma_df, stats_HIV_limma_df$adj.P.Val <= pval_thres_limma)
+#sign_lipids_limma <- subset(sign_lipids_limma, abs(stats_HIV_limma$logFC) >= log_thres_limma)
 
 method_list_univariate <- list('Mann Whitney U Test' = sign_lipids_MW$Biochemicals, 
                                'Limma test with "limma"' = sign_lipids_limma$Biochemicals)

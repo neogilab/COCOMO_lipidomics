@@ -20,9 +20,6 @@ library(plotROC)
 
 # Variables
 vipvn_thres <- 1 # Cut-off is usally > 1 for vipVn values
-acc_thres <- 0.0025 
-gini_thres <- 0.5
-
 
 
 # Load data ---------------------------------------------------------------
@@ -49,20 +46,20 @@ lipidomics_data_tidy <- as.data.frame(lipidomics_data_tidy)
 rownames(lipidomics_data_tidy) <- lipidomics_data_tidy$ID_Condition
 
 # Filter out the females among HIV infected
-lipidomics_data_tidy_hiv <- lipidomics_data_tidy %>% 
-  filter(!str_detect(GENDER, "Female")) 
+##lipidomics_data_tidy_hiv <- lipidomics_data_tidy %>% 
+  ##filter(!str_detect(GENDER, "Female")) 
 
 
 
 # Partial least-squares (PLS-DA) ---------------------------------------------------------------------
 # PLS-DA on three groups
-png("results/05_pls-da.png")
-opls(lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy_hiv)], lipidomics_data_tidy$Condition)
+png("results/05_pls-da_condition.png")
+plsda_condition <- opls(lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)], lipidomics_data_tidy$Condition)
 dev.off()
 
 # PLS-DA on HIV patients divided by condition
-png("results/05_pls-da_HIV_condition.png")
-lipid_plsda <- opls(lipidomics_data_tidy_hiv[, 4:ncol(lipidomics_data_tidy_hiv)], lipidomics_data_tidy_hiv$Condition)
+png("results/05_pls-da_gender.png")
+plsda_gender <- opls(lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)], lipidomics_data_tidy$GENDER)
 dev.off()
 
 # PLS-DA on HIV patients divided by gender
@@ -71,15 +68,15 @@ dev.off()
 #dev.off()
 
 # PLS-DA on HIV groups: Extract VIP scores for all lipids
-lipid_plsda_vipvn <- getVipVn(lipid_plsda)
-lipid_plsda_vipvn <- as.data.frame(lipid_plsda_vipvn)
-lipid_plsda_vipvn_df <- rownames_to_column(lipid_plsda_vipvn, "Lipids")
-lipid_plsda_vipvn_df_order <- lipid_plsda_vipvn_df[order(lipid_plsda_vipvn, decreasing = TRUE),]
+plsda_condition_vipvn <- getVipVn(plsda_condition)
+plsda_condition_vipvn <- as.data.frame(plsda_condition_vipvn)
+plsda_condition_vipvn_df <- rownames_to_column(plsda_condition_vipvn, "Lipids")
+plsda_condition_vipvn_df_order <- plsda_condition_vipvn_df[order(plsda_condition_vipvn, decreasing = TRUE),]
 
 # PLS-DA: Plot vip values
-plsda_vipplot <- lipid_plsda_vipvn_df_order %>% 
-  filter(!lipid_plsda_vipvn <= vipvn_thres) %>% 
-  ggplot(aes(x = reorder(Lipids, -lipid_plsda_vipvn), y = lipid_plsda_vipvn)) + 
+plsda_vipplot <- plsda_condition_vipvn_df_order %>% 
+  filter(!plsda_condition_vipvn <= vipvn_thres) %>% 
+  ggplot(aes(x = reorder(Lipids, -plsda_condition_vipvn), y = plsda_condition_vipvn)) + 
   geom_col() + 
   labs(title = "PLS-DA: Vip scores",
        subtitle = "Cut-off vip value < 1",
@@ -89,7 +86,7 @@ plsda_vipplot <- lipid_plsda_vipvn_df_order %>%
 ggsave("results/05_vip_values_plsda.png", plot = plsda_vipplot, device = "png", width = 8, height = 3.1)
 
 # PLS-DA on HIV groups: Significant lipids
-sign_lipids_HIV_plsda <- subset(lipid_plsda_vipvn_df_order$Lipids, lipid_plsda_vipvn_df_order$lipid_plsda_vipvn > vipvn_thres)
+sign_lipids_HIV_plsda <- subset(plsda_condition_vipvn_df_order$Lipids, plsda_condition_vipvn_df_order$plsda_condition_vipvn > vipvn_thres)
 
 
 # Random forest with MVUR -------------------------------------
@@ -97,17 +94,17 @@ sign_lipids_HIV_plsda <- subset(lipid_plsda_vipvn_df_order$Lipids, lipid_plsda_v
 # Method used when few observations and a large number of variables
 
 # Filter out the control group
-lipidomics_data_tidy_HIV <- lipidomics_data_tidy %>% 
-  filter(!str_detect(Condition, "Ctrl")) 
+##lipidomics_data_tidy_HIV <- lipidomics_data_tidy %>% 
+##  filter(!str_detect(Condition, "Ctrl")) 
 
 # Create "condition" factor with two levels "HIV_MetS" and "HIV_NoMetS"
-condition_fac <- as.factor(lipidomics_data_tidy_HIV$Condition)
+condition_fac <- as.factor(lipidomics_data_tidy$Condition)
 
 # Set method parameters, for parallel processing
 nCore=detectCores()-1   # Number of processor threads to use, uses all but one thread
-nRep=nCore              # Number of MUVR repetitions, usally between 20 and 50 
+nRep=50              # Number of MUVR repetitions, usally between 20 and 50 
 nOuter=8                # Number of outer cross-validation segments, usally between 6 and 8. Higher number when fewer observations ???> increase number of observations in the model training
-varRatio=0.8            # Proportion of variables kept per iteration, usally start out low 0.75 and increase towards 0.85-0.9 for final processing 
+varRatio=0.85           # Proportion of variables kept per iteration, usally start out low 0.75 and increase towards 0.85-0.9 for final processing 
 method='RF'             # Selected core modelling algorithm to Random Forest
 
 # Set up parallel processing using doParallel 
@@ -117,7 +114,7 @@ registerDoParallel(cl)
 # OBS: hard to set seed for reproducibility, as it is parallel processing 
 
 # Perform modelling
-classModel = MUVR(X=lipidomics_data_tidy_HIV[, 4:ncol(lipidomics_data_tidy_HIV)], 
+classModel = MUVR(X=lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)], 
                   Y=condition_fac, 
                   nRep=nRep, 
                   nOuter=nOuter, 
@@ -133,37 +130,61 @@ classModel$miss                         # Number of misclassifications for min, 
 classModel$nVar                         # Number of variables for min, mid and max models
 cbind(condition_fac, classModel$yClass)          # Actual class side-by-side with min, mid and max predictions
 plotVAL(classModel)
-plotMV(classModel, model='min')         # Look at the model of choice: min, mid or max
-plotStability(classModel, model='min')  # The stability plot for classification analysis generates three subplots. 1. Number of selected variables for each repetition as well as cumulative average over the repetitions; 2. The proportion of selected variables reports the ratio of the final variable selection found in each repetition and cumulatively, averaged over the number of repetitions; 3. Number of misclassifications per repetition and cumulatively. 
-plotVIP(classModel, model='min')        # Boxplot of the variables automatically selected from optimal modelling performance. 
-getVIP(classModel, model='mid')         # Extract most informative variables: Lower rank is better
+plotMV(classModel, model='max')         # Look at the model of choice: min, mid or max
+plotStability(classModel, model='max')  # The stability plot for classification analysis generates three subplots. 1. Number of selected variables for each repetition as well as cumulative average over the repetitions; 2. The proportion of selected variables reports the ratio of the final variable selection found in each repetition and cumulatively, averaged over the number of repetitions; 3. Number of misclassifications per repetition and cumulatively. 
+plotVIP(classModel, model='max')        # Boxplot of the variables automatically selected from optimal modelling performance. 
+getVIP(classModel, model='max')         # Extract most informative variables: Lower rank is better
+
 
 # Extract significant lipids
-rf_MUVR_sig <- getVIP(classModel, model='mid')
-sign_lipids_HIV_MUVR <- rf_MUVR_sig$name
+rf_MUVR_sig <- getVIP(classModel, model='max') %>% 
+  rename(lipids = name) %>% 
+  mutate(`Lipid class` = case_when(str_detect(lipids, "DAG") ~ "Diacylglycerol",
+                                   str_detect(lipids, "TAG") ~ "Triacylglycerol"))
+sign_lipids_HIV_MUVR <- rf_MUVR_sig$lipids
+
+# order
+rf_MUVR_sig$lipids <- factor(rf_MUVR_sig$lipids, levels = rf_MUVR_sig$lipids[order(desc(rf_MUVR_sig$rank))])
+
+# Plot significant lipids according to their rank
+vip_score_plot <- ggplot(as.data.frame(rf_MUVR_sig), aes(x=lipids, y=rank, label=round(rank,1))) + 
+  geom_point(stat='identity', aes(col=`Lipid class`), size=4)  +
+ # scale_color_manual(labels = c("Triacylglycerol", "Diacylglycerol"), 
+  #                   values = c("Triacylglycerol"="#00ba38", "Diacylglycerol"="#f8766d")) + 
+  geom_text(color="black", size=2) +
+  labs(title="VIP score plot", 
+       subtitle="Lower rank indicates better prediction variables") + 
+  ylab("Rank") + xlab("Increasing importance to group seperation") +
+  ylim(-50, 470) +
+  coord_flip() +
+  geom_segment(aes(x=0, xend = 13.5 , y=-50, yend = -50), size=1, arrow = arrow(length = unit(0.3,"cm")))
+vip_score_plot
+
+ggsave("results/05_vip_score_plot.png", plot = vip_score_plot, device = "png")#, width = 6.17, height = 3.1)
+
 
 # Performance of binary classification
 cm <- classModel$Fit$rfFitMid$confusion
 
 #Draw the ROC curve ..
-##MUVR_probs <- as.data.frame(classModel$yPred$mid)
-##auc_mid_MUVR <- classModel$auc[2,1]
-##rocplot <- ggplot(lipidomics_data_tidy_hiv_raw[, 4:ncol(lipidomics_data_tidy_hiv_raw)], 
-  #                aes(m = MUVR_probs$HIV_NoMetS, 
-  #                    d = classModel$yClass$mid)) + 
-  #geom_roc(n.cuts=20) + 
-  #style_roc(theme = theme_grey) + 
-  #ggtitle("ROC plot for Random Forest model MVUR") +
-  #theme(plot.title = element_text(hjust = 0.5)) +
-  #annotate("text", x = .75, y = .25, label = paste("AUC =", round(classModel$auc[2,1], 3)))
-##rocplot
+MUVR_probs <- as.data.frame(classModel$yPred$max)
+auc_mid_MUVR <- classModel$auc[3,1]
 
+roc_data <- cbind(classModel$yClass$max, MUVR_probs) %>% 
+  mutate(binary_condition = case_when(classModel$yClass$mid == 'HIV_NoMetS' ~ 0,
+                                      classModel$yClass$mid == 'HIV_MetS' ~ 1))
 
+rocplot <- ggplot(lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)], 
+                  aes(m = roc_data$HIV_MetS, 
+                      d = roc_data$binary_condition)) + 
+  geom_roc(n.cuts=20) + 
+  style_roc(theme = theme_grey) + 
+  ggtitle("ROC plot for Random Forest model MVUR") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = .75, y = .25, label = paste("AUC =", round(auc_mid_MUVR, 3)))
+rocplot
+ggsave("results/05_roc.png", plot = rocplot, device = "png")#, width = 6.17, height = 3.1)
 
-
-
-# Linear regression -----------------------------------------------------
-xxx
 
 
 # List with significant lipids from different methods -------------------------------

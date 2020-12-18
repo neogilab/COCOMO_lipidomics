@@ -75,6 +75,8 @@ y <- str_c("PC2 (", round(y*100, 2), "%)")
 # Subset outliers
 pca_outliers_sub = subset(data_pca_aug, abs(.fittedPC1) >= 45 | abs(.fittedPC2) >= 23)
 
+data_pca_aug$Condition <- factor(data_pca_aug$Condition , levels=c("Ctrl", "HIV_NoMetS", "HIV_MetS"))
+
 # Plot PCA with medical condition as labels
 pca_condition <- data_pca_aug %>% 
   ggplot(aes(x = .fittedPC1,
@@ -82,8 +84,9 @@ pca_condition <- data_pca_aug %>%
              colour = Condition)) + 
   geom_point(size = 3, alpha = 0.5) + 
   labs(x = x, y = y, title = "PCA", color = "Condition") +
-  stat_ellipse(level = 0.2) + 
-  stat_ellipse(level = 0.6) +
+  scale_color_manual(values = c("#32CD32", "#6495ED")) + # (Green, Blue, Red - "#FA8072") +
+ # stat_ellipse(level = 0.2) + 
+  stat_ellipse(level = 0.9) +
   geom_text_repel(pca_outliers_sub, mapping = aes(x = .fittedPC1,
                                 y = .fittedPC2,
                                 label = ID_Condition),
@@ -94,6 +97,7 @@ pca_condition <- data_pca_aug %>%
                   segment.color = "grey50", 
                   force = 1, 
                   size = 2) 
+pca_condition
 ggsave("results/04_pca_condition.png", plot = pca_condition, device = "png", width = 6.17, height = 3.1)
 
 # Save PCA and scree plot
@@ -137,18 +141,19 @@ kmeans_condition <- data_kmeans_aug %>%
              colour = Cluster)) +
   geom_point(size = 3, alpha = 0.5) +
   labs(x = x, y = y, title = "K-means") +
-  stat_ellipse(level = 0.2) + 
-  stat_ellipse(level = 0.6) + 
-  geom_text_repel(data_kmeans_aug, mapping = aes(x = .fittedPC1,
-                                   y = .fittedPC2,
-                                   label = ID_Condition),
-                  nudge_x      = 0.2,
-                  direction    = "y",
-                  hjust        = 0.5,
-                  segment.size = 0.01,
-                  segment.color = "grey50", 
-                  force = 1, 
-                  size = 2) 
+#  scale_color_manual(values = c("#32CD32", "#6495ED")) + # (Green, Blue, Red - "#FA8072") +
+#  stat_ellipse(level = 0.2) + 
+  stat_ellipse(level = 0.9) #+ 
+  #geom_text_repel(data_kmeans_aug, mapping = aes(x = .fittedPC1,
+   #                                y = .fittedPC2,
+    #                               label = ID_Condition),
+     #             nudge_x      = 0.2,
+      #            direction    = "y",
+       #           hjust        = 0.5,
+        #          segment.size = 0.01,
+         #         segment.color = "grey50", 
+          #        force = 1, 
+           #       size = 2) 
 kmeans_condition
 ggsave("results/04_kmeans_condition.png", plot = kmeans_condition, device = "png", width = 6.17, height = 3.1)
 
@@ -219,7 +224,7 @@ dev.off()
 # Color code according to the conditions
 groupCodes <- c(rep("HIV_MetS",100), rep("HIV_NoMetS",100))
 colnames(lip_data_norm) <- make.unique(groupCodes)
-colorCodes <- c(HIV_MetS="red", HIV_NoMetS="green")
+colorCodes <- c(HIV_MetS="blue", HIV_NoMetS="green")
 
 # Make distance matrix and the hierarchical clustering
 data_dist <- dist(t(lip_data_norm))

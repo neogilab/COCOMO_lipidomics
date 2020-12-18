@@ -11,6 +11,10 @@ library(UpSetR)
 library(RVenn)
 library(tidyverse)
 library(broom)
+library(RColorBrewer)
+library(matrixStats)
+library(dendextend)
+library(gplots)
 
 # Load lists from files (03_univariate_analysis.R and 05_supervised_analysis.R)
 load("data/05_methods_supervised.RData")
@@ -80,17 +84,17 @@ ggsave("results/07_boxplot_significant_lipids.png", plot = sign_lipids_plot, dev
 
 # PCA of significant lipids ---------------------------
 # Remove the Ctrl from the data set and extract the consensus lipids found above
-lipidomics_data_tidy <- lipidomics_data_tidy %>% 
+lipidomics_data_tidy_sign <- lipidomics_data_tidy %>% 
 #  filter(!str_detect(ID_Condition, "Ctrl")) %>% 
   select(ID_Condition, Condition, GENDER, intersection) 
 
 # Log2 transform data
-lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)] <- sapply(log2(lipidomics_data_tidy[, 4:ncol(lipidomics_data_tidy)]), as.numeric)
-lipidomics_data_tidy_df <- as.data.frame(lipidomics_data_tidy)
+lipidomics_data_tidy_sign[, 4:ncol(lipidomics_data_tidy_sign)] <- sapply(log2(lipidomics_data_tidy_sign[, 4:ncol(lipidomics_data_tidy_sign)]), as.numeric)
+lipidomics_data_tidy_df <- as.data.frame(lipidomics_data_tidy_sign)
 rownames(lipidomics_data_tidy_df) <- lipidomics_data_tidy_df$ID_Condition
 
 # Create PCA object 
-data_pca <- lipidomics_data_tidy %>%
+data_pca <- lipidomics_data_tidy_sign %>%
   select(everything(), -c(GENDER, Condition, ID_Condition)) %>% 
   prcomp(scale. = TRUE)
 
@@ -111,7 +115,7 @@ scree <- data_pca_tidy %>%
 
 # Augment data in order to get a complete table with original values and PC values. 
 data_pca_aug <- data_pca %>% 
-  augment(lipidomics_data_tidy)
+  augment(lipidomics_data_tidy_sign)
 
 # Adding percentage to the PCA plot
 x <- data_pca_tidy %>% 
@@ -146,7 +150,48 @@ ggsave("results/07_pca_significant_lipids.png", plot = pca_condition, device = "
 # Heatmap & pairwise alignment of significant lipids ----------------------------------------------
 # Look in Jupyter notebook in Python folder "07_consensus_analysis"
 
+zscore <- function(x) {
+  (x-mean(x))/sd(x)
+}
+
+# Calculate zscores
+lipid_sign_zscore <- cbind(lipidomics_data_tidy_sign[1:3],lapply(lipidomics_data_tidy_sign[4:ncol(lipidomics_data_tidy_sign)], zscore))
+
+# Average of z scores for hivnomets and hivmets
+samples <- colnames(lipid_sign_zscore[4:ncol(lipid_sign_zscore)])
+lipid_sign_zscore_avg <- lipid_sign_zscore %>% 
+  select(Condition, everything(), -c("ID_Condition", "GENDER")) %>% 
+  group_by(Condition) %>% 
+  summarise_at(samples, mean, na.rm = TRUE) %>% 
+  pivot_longer(-Condition) %>% 
+  pivot_wider(names_from=Condition, values_from=value) 
+
+# Add rownames and colnames to data frame
+lipnames <- lipid_sign_zscore_avg$name
+lipid_sign_zscore_avg <- as.matrix.data.frame(lipid_sign_zscore_avg[, 2:3])
+rownames(lipid_sign_zscore_avg) <- lipnames
+
+# Heatmap
+hmcol <- colorRampPalette(brewer.pal(9, "GnBu"))(200)
+png("results/07_heatmap_significant_lipids.png",            
+    width = 10*300,        # 5 x 300 pixels
+    height = 10*300,
+    res = 300,            # 300 pixels per inch
+    pointsize = 8)        # font size)      
+heatmap.2(as.matrix(lipid_sign_zscore_avg),
+          col = hmcol, 
+          main = "Heatmap of significant lipids", # heat map title
+          density.info="none",  # turns off density plot inside color legend
+          trace="none",         # turns off trace lines inside the heat map
+          margins =c(12,9),     # widens margins around plot
+          dendrogram="none",     # only draw a row dendrogram
+          linecol = "both",
+          Colv=TRUE,
+          srtCol=0, adjCol = c(1,1))
+dev.off()
+
 
 # Save file with significant lipids ---------------------------------------
 as_tibble(intersection_list_sig_lipids) %>% 
   write_csv("data/07_sign_lipids.csv")
+

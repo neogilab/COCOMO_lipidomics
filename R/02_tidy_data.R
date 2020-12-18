@@ -14,17 +14,20 @@ library(caret)
 clinical_data <- read_csv("data/01_clinical_data.csv")
 lipidomics_data <- read_csv("data/01_lipidomics_data.csv")
 metabolomics_data <- read_csv("data/01_metabolomics_data.csv")
+vatsat_data <- read_csv("data/01_vatsat_data.csv")
 
 
 
 # Tidying clinical data  --------------------------------------------------
 # More to come...
 # Combine the "ID" col with the "Condition" col
-clinical_data_modified <- as_tibble(clinical_data) %>%
+clinical_data_2 <- as_tibble(clinical_data) %>%
   select(SUBJECT_ID, CONDITION, everything()) %>% 
-  unite(col = "ID_Condition", "SUBJECT_ID":"CONDITION", sep = "_", remove = FALSE, na.rm = TRUE)
+  unite(col = "ID_Condition", "SUBJECT_ID":"CONDITION", sep = "_", remove = FALSE, na.rm = TRUE) 
 
-
+# Join VAT/SAT data with the other clinical data
+clinical_data_modified <- left_join(clinical_data_2, vatsat_data, by = "id")
+  
 
 # Tidying lipidomics data ---------------------------------------------
 # Remove rows as they contain clinical data, except subject_id
@@ -35,8 +38,8 @@ lipidomics_data_modified <- lipidomics_data %>%
 lip_info <- lipidomics_data_modified %>% 
   select(BIOCHEMICAL, SUPER_PATHWAY,SUB_PATHWAY,	KEGG,	`Group   HMDB_ID`) %>% 
   slice(3:n()) %>% 
-  rename(Biochemical = BIOCHEMICAL, Super_pathway = SUPER_PATHWAY, Sub_pathway = SUB_PATHWAY, KEGG_ID = KEGG, HMDB_ID = `Group   HMDB_ID`) %>% 
-  filter(!str_detect(Biochemical, 'Total'))  %>% 
+  rename(Biochemicals = BIOCHEMICAL, Super_pathway = SUPER_PATHWAY, Sub_pathway = SUB_PATHWAY, KEGG_ID = KEGG, HMDB_ID = `Group   HMDB_ID`) %>% 
+  filter(!str_detect(Biochemicals, 'Total'))  %>% 
   mutate(Group = "lipid")
 
 # Transpose lipid matrix and combine "ID" col with "Condition" col
@@ -70,14 +73,16 @@ any(is.na(lipidomics_data_modified)) #FALSE = No missing values
 
 # Remove columns with zero variance or near zero variance
 compute_nzv <- nearZeroVar(lipidomics_data_modified[, 4:ncol(lipidomics_data_modified)], 
-                           saveMetrics = TRUE)
+                           saveMetrics = TRUE) %>% 
+  mutate(Biochemicals = rownames(.))
 
 nzv_lipids <- compute_nzv %>% 
   filter(nzv == FALSE) %>% 
-  rownames(.)
+  select(Biochemicals)
+
 
 lipidomics_data_modified_var <- lipidomics_data_modified %>% 
-  select(GENDER, ID_Condition, Condition, all_of(nzv_lipids))
+  select(GENDER, ID_Condition, Condition, all_of(nzv_lipids$Biochemicals))
 
 
 # Tidying metabolomics data ---------------------------------------------
@@ -94,8 +99,8 @@ sign_met <- c('1-carboxyethylleucine', '4-cholesten-3-one', '4-hydroxyglutamate'
 met_info <- metabolomics_data_modified %>% 
   slice(2:n()) %>% 
   select(...2, ...12, `CLIENT IDENTIFIER`, ...3, ...4) %>% # Biochemical, Kegg entry and HMDB entry 
-  rename(Biochemical = ...2, KEGG_ID = ...12, HMDB_ID = `CLIENT IDENTIFIER`, Super_pathway = ...3, Sub_pathway = ...4) %>% 
-  filter(Biochemical %in% sign_met)  %>% 
+  rename(Biochemicals = ...2, KEGG_ID = ...12, HMDB_ID = `CLIENT IDENTIFIER`, Super_pathway = ...3, Sub_pathway = ...4) %>% 
+  filter(Biochemicals %in% sign_met)  %>% 
   mutate(Group = "metabolite")
 
 # Transpose metabolite matrix and combine the "ID" col with the "Condition" col
@@ -127,14 +132,15 @@ metabolomics_data_modified[, 4:ncol(metabolomics_data_modified)] <- sapply(metab
 any(is.na(metabolomics_data_modified)) #FALSE = No missing values
 
 # Remove columns with zero variance or near zero variance
-compute_nzv <- nearZeroVar(metabolomics_data_modified[, 4:ncol(metabolomics_data_modified)], saveMetrics = TRUE)
+compute_nzv <- nearZeroVar(metabolomics_data_modified[, 4:ncol(metabolomics_data_modified)], saveMetrics = TRUE) %>% 
+  mutate(Biochemicals = rownames(.))
 
 nzv_metabolites <- compute_nzv %>% 
   filter(nzv == FALSE) %>% 
-  rownames(.)
+  select(Biochemicals)
 
 metabolomics_data_modified_var <- metabolomics_data_modified %>% 
-  select(GENDER, ID_Condition, Condition, all_of(nzv_metabolites))
+  select(ID_Condition, Condition, nzv_metabolites$Biochemicals)
 
 # Select significant metabolites
 metabolomics_sign_met <- metabolomics_data_modified %>% 
@@ -168,7 +174,7 @@ lip_met_merge_data_var <- merge(x = lipidomics_data_modified_var,
                             all.x = TRUE) 
   
 # Data which have a KEGG entry, HMDB entry or both
-lip_met_merge_data_clean <- lip_met_merge_data_var[colnames(lip_met_merge_data_var) %in% lip_met_merge_data_entries$Biochemical] %>% 
+lip_met_merge_data_clean <- lip_met_merge_data_var[colnames(lip_met_merge_data_var) %in% lip_met_merge_data_entries$Biochemicals] %>% 
   mutate(ID_Condition = lip_met_merge_data$ID_Condition, 
          Condition = lip_met_merge_data$Condition.x, 
          Gender = lip_met_merge_data$GENDER) %>% 
@@ -181,7 +187,7 @@ lipidomics_data_modified_var %>%
   write_csv("data/02_lipidomics_data_tidy.csv")
 
 lip_info %>% 
-  filter(Biochemical %in% nzv_lipids) %>% 
+  filter(Biochemicals %in% nzv_lipids$Biochemicals) %>% 
   write_csv("data/02_lipidomics_data_info.csv")
 
 metabolomics_data_modified_var %>% 
@@ -214,4 +220,4 @@ xxxx <- aggregate(lipidomics_data_modified[, 4:ncol(lipidomics_data_modified)],
                   list(lipidomics_data_modified$Condition), 
                   mean) %>% 
   t(.) %>% 
-  merge(x = ., y = lip_info, by = intersect(rownames(.), lip_info$Biochemical))
+  merge(x = ., y = lip_info, by = intersect(rownames(.), lip_info$Biochemicals))

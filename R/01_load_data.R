@@ -11,9 +11,13 @@ library(tidyverse)
 
 
 # Load clinical data from excel file --------------------------------------
-# This dataset is a combination of the COCOMO_HIV_data.xlsx amd the COCOMO_validated_data.xlsx
+# This dataset is a combination of the COCOMO_HIV_data.xlsx and the COCOMO_validated_data.xlsx
 clinical_data <- read_xlsx("data/_raw/clinical_data_COCOMO.xlsx") %>% 
   write_csv("data/01_clinical_data.csv")
+
+# Data from the Visceral Adipose Tissue (VAT) and Subcutaneous Abdominal Tissue (SAT)
+vatsat_data <- read_xlsx("data/_raw/Fat_data.xlsx") %>% 
+  write_csv("data/01_vatsat_data.csv")
 
 
 # Load lipidomics data from excel file ----------------------------------------------------
