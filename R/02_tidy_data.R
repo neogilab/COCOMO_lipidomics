@@ -1,6 +1,6 @@
 ##########################################################
 # Script for cleaning data. This script will tidy the data 
-# and handle missing values and low variance.
+# and handle missing values and zero or near-zero variance.
 ##########################################################
 
 # Clear workspace
@@ -10,7 +10,7 @@ rm(list = ls())
 library(tidyverse)
 library(caret)
 
-# Load data ---------------------------------------------------------------
+# Load data 
 clinical_data <- read_csv("data/01_clinical_data.csv")
 lipidomics_data <- read_csv("data/01_lipidomics_data.csv")
 metabolomics_data <- read_csv("data/01_metabolomics_data.csv")
@@ -19,15 +19,92 @@ vatsat_data <- read_csv("data/01_vatsat_data.csv")
 
 
 # Tidying clinical data  --------------------------------------------------
-# More to come...
 # Combine the "ID" col with the "Condition" col
 clinical_data_2 <- as_tibble(clinical_data) %>%
   select(SUBJECT_ID, CONDITION, everything()) %>% 
   unite(col = "ID_Condition", "SUBJECT_ID":"CONDITION", sep = "_", remove = FALSE, na.rm = TRUE) 
 
 # Join VAT/SAT data with the other clinical data
-clinical_data_modified <- left_join(clinical_data_2, vatsat_data, by = "id")
-  
+clinical_data_combined <- left_join(clinical_data_2, vatsat_data, by = "id")
+
+# Subsetting the clinical variables
+clinical_data_modified <- clinical_data_combined %>% 
+  select(ID_Condition, AGE, GENDER, CONDITION, Ethnic, CD4_nadir, CDCAIDS, VAT, SAT,
+         ART1, ART2, ART3, ART4, ART5, 
+         ART1_prev, ART2_prev, ART3_prev, ART4_prev, ART5_prev, ART6_prev, ART7_prev, ART8_prev, ART9_prev, ART10_prev) %>% 
+  replace_na(list(Ethnic = 4)) %>% # 4 = other/unknown
+  replace_na(list(VAT = mean(.$VAT, na.rm = TRUE))) %>% 
+  replace_na(list(SAT = mean(.$SAT, na.rm = TRUE))) %>% 
+  #mutate(age_groupings = findInterval(AGE, c(40, 50, 60, 70))) %>% # Make age groupings 1[40-49], 2[50-59], 3[60-69], 4[70-79]
+  mutate(Gender_enc = case_when(GENDER == 'Female' ~ 0,
+                                GENDER == 'Male' ~ 1)) %>% 
+  mutate(Condition_enc = case_when(CONDITION == 'HIV_NoMetS' ~ 0,
+                                   CONDITION == 'HIV_MetS' ~ 1))
+
+# Split the cART into their different groups
+# Atripla
+clinical_data_modified$ART1[clinical_data_modified$ART1 == "Atripla"] <- "Atripla_nrti"
+clinical_data_modified$ART2[clinical_data_modified$ART1 == "Atripla_nrti"] <- "Atripla_nnrti"
+
+# Genvoya
+clinical_data_modified$ART1[clinical_data_modified$ART1 == "Genvoya"] <- "Genvoya_nrti"
+clinical_data_modified$ART2[clinical_data_modified$ART1 == "Genvoya_nrti"] <- "Genvoya_pi"
+clinical_data_modified$ART3[clinical_data_modified$ART1 == "Genvoya_pi"] <- "Genvoya_insti"
+
+# Stribild
+clinical_data_modified$ART1[clinical_data_modified$ART1 == "Stribild"] <- "Stribild_nrti"
+clinical_data_modified$ART2[clinical_data_modified$ART1 == "Stribild_nrti"] <- "Stribild_pi"
+clinical_data_modified$ART3[clinical_data_modified$ART1 == "Stribild_pi"] <- "Stribild_insti"
+
+# Triumeq
+clinical_data_modified$ART1[clinical_data_modified$ART1 == "Triumeq"] <- "Triumeq_nrti"
+clinical_data_modified$ART2[clinical_data_modified$ART1 == "Triumeq_nrti"] <- "Triumeq_insti"
+
+# List of unique names for all ART (curr + prev)
+ART_all <- c(as_tibble(unique(clinical_data_modified$ART1))$value, as_tibble(unique(clinical_data_modified$ART2))$value, 
+             as_tibble(unique(clinical_data_modified$ART3))$value, as_tibble(unique(clinical_data_modified$ART4))$value, 
+             as_tibble(unique(clinical_data_modified$ART5))$value,
+             as_tibble(unique(clinical_data_modified$ART1_prev))$value, as_tibble(unique(clinical_data_modified$ART2_prev))$value, 
+             as_tibble(unique(clinical_data_modified$ART3_prev))$value, as_tibble(unique(clinical_data_modified$ART4_prev))$value, 
+             as_tibble(unique(clinical_data_modified$ART5_prev))$value, as_tibble(unique(clinical_data_modified$ART6_prev))$value, 
+             as_tibble(unique(clinical_data_modified$ART7_prev))$value, as_tibble(unique(clinical_data_modified$ART8_prev))$value, 
+             as_tibble(unique(clinical_data_modified$ART9_prev))$value, as_tibble(unique(clinical_data_modified$ART10_prev))$value)
+uniq_ART_all <- as_tibble(unique(ART_all))
+
+# Based on the unique list of ART (43 terms), each term has been grouped into the following 6 groups
+# The combined ART tablets: 'Atripla', 'Genvoya', 'Stribild', 'Triumeq' are split into the first 5 groups
+NRTI            <- c('Combivir', 'Complera', 'Complera Complera', 'Descovy', 'Emtriva(emtricitabin,FTC)', 'Epivir(lamivudin,3TC)', 'Epzicom', 
+                     'Kivexa', 'Lamivudin', 'Trizivir', 'Truvada', 'Viread(tenofovir,TDF)', 'Ziagen(abavacir,ABC)', 'Atripla_nrti', 'Genvoya_nrti', 'Stribild_nrti', 'Triumeq_nrti')
+NNRTI           <- c('Edurant (rilpivirine, RPV)', 'Intelence (etravirine, ETR)', 'Invirase (saquinavir, SQV)', 'Stocrin', 
+                     'Sustiva (Stocrin, efavirenz, EFV)', 'Viramune XR (nevirapine, NVP)', 'Atripla_nnrti')
+PI              <- c('Amprenavir', 'Kaletra (Aluvia, lopinavir/ritonavir, LPV/r)', 'Norvir (ritonavir, RTV)', 'Norvir(ritonavir,RTV)','Prezcobix (Rezolsta, darunavir + cobicistat)', 
+                     'Prezista (darunavir, DRV)', 'Reyataz (atazanavir, ATV)', 'Tybost(cobicstat)', 'Viracept (nelfinavir, NFV)', 'Genvoya_pi', 'Stribild_pi')
+INSTI           <- c('Isentress (raltegravir)', 'Tivicay (dolutegravir)', 'Vitekta (elvitegravir)', 'Genvoya_insti', 'Stribild_insti', 'Triumeq_insti')
+other_unknown   <- c('83', 'Fuzeon (enfuvirtide, ENF)', 'Selzentry (Celsentri, maraviroc)', 
+                     'Retrovir(zidovudin,AZT)') # Only one lipo_art in "current ART cols", maybe a mistake - therefore in other group. Maraviroc is an entry inhibitor, however there are few of the, thus classified "other"
+
+# List of previous ART
+lipo_ART        <- c('Crixivan (indinavir, IDV)', 'Retrovir(zidovudin,AZT)', 'Videx(didanosine,ddl)', 'Videx(didanosine,ddl) Videx(didanosine)', 'Zerit(stavudin,d4T)')
+
+# Creating new columns with encoded values for the ART groups and boolean column for thymidine exposure or not. 
+druglist <- c('ART1', 'ART2', 'ART3', 'ART4', 'ART5')
+clinical_data_modified_encoded <- clinical_data_modified %>% 
+  mutate(NRTI = apply(.[, druglist], 1, function(r) any(r %in% NRTI)),
+         NNRTI = apply(.[, druglist], 1, function(r) any(r %in% NNRTI)),
+         PI = apply(.[, druglist], 1, function(r) any(r %in% PI)),
+         INSTI = apply(.[, druglist], 1, function(r) any(r %in% INSTI)),
+         Other_Unknown = apply(.[, druglist], 1, function(r) any(r %in% other_unknown)),
+         thym_exposure = apply(.[, c('ART1_prev', 'ART2_prev', 'ART3_prev', 'ART4_prev', 'ART5_prev', 'ART6_prev', 'ART7_prev', 'ART8_prev', 'ART9_prev', 'ART10_prev')], 
+                               1, function(r) any(r %in% lipo_ART)), # If a value from lipo_ART is in any of the 10 cols, then TRUE otherwise FALSE
+         immunodeficiency = case_when(CD4_nadir > 200 | CDCAIDS == '0' ~ 0,
+                                      CD4_nadir < 200 | CDCAIDS == '1' ~ 1)) %>% 
+  select(ID_Condition, CONDITION, Condition_enc, AGE, GENDER, Gender_enc, Ethnic, immunodeficiency, thym_exposure, VAT, SAT,
+         NRTI, NNRTI, PI, INSTI, Other_Unknown)
+
+cols <- c('thym_exposure', 'NRTI', 'NNRTI', 'PI', 'INSTI', 'Other_Unknown')
+clinical_data_modified_encoded[,cols] <- lapply(clinical_data_modified_encoded[,cols], as.numeric)
+
+
 
 # Tidying lipidomics data ---------------------------------------------
 # Remove rows as they contain clinical data, except subject_id
@@ -60,7 +137,7 @@ lipidomics_data_modified <- lipidomics_data_modified %>%
   select(everything(), -starts_with("Total")) 
 
 # Select male samples only and deselect ctrl group
-lipidomics_data_modified <- merge(x = lipidomics_data_modified, y = clinical_data_modified[ , c("ID_Condition", "GENDER")], by = "ID_Condition", all.x=TRUE) %>% 
+lipidomics_data_modified <- merge(x = lipidomics_data_modified, y = clinical_data_modified_encoded[ , c("ID_Condition", "GENDER")], by = "ID_Condition", all.x=TRUE) %>% 
 #  filter(!GENDER == "Female") %>% 
   filter(!Condition == "Ctrl") %>% 
   select(GENDER, everything(), -ID)
@@ -80,9 +157,18 @@ nzv_lipids <- compute_nzv %>%
   filter(nzv == FALSE) %>% 
   select(Biochemicals)
 
-
 lipidomics_data_modified_var <- lipidomics_data_modified %>% 
   select(GENDER, ID_Condition, Condition, all_of(nzv_lipids$Biochemicals))
+
+# Change TAG names to accomodate the correct nomenclature (insert paranthesis)
+col_names <- gsub('^(TAG)([0-9]*\\S[0-9]*)(\\SFA)([0-9]*\\S[0-9]*)$', '\\1(\\2)\\3(\\4)', colnames(lipidomics_data_modified_var))
+colnames(lipidomics_data_modified_var) <- col_names
+
+# Change TAG names
+lip_info_without_nzv <- lip_info %>% 
+  filter(Biochemicals %in% nzv_lipids$Biochemicals) %>% 
+  mutate(Biochemicals = col_names[4:920])
+
 
 
 # Tidying metabolomics data ---------------------------------------------
@@ -119,12 +205,6 @@ colnames(metabolomics_data_modified)[1:3] <- c("ID_Condition", "ID", "Condition"
 metabolomics_data_modified <- metabolomics_data_modified %>% 
   slice(2:n()) 
 
-# Select male samples only
-# metabolomics_data_modified <- merge(x = metabolomics_data_modified, y = clinical_data_modified[ , c("ID_Condition", "GENDER")], by = "ID_Condition", all.x=TRUE) %>% 
-#filter(!GENDER == "Female") %>% 
-#  filter(!Condition == "Ctrl") %>% 
-#  select(GENDER, everything(), -ID)
-
 # Make the metabolite columns numeric
 metabolomics_data_modified[, 4:ncol(metabolomics_data_modified)] <- sapply(metabolomics_data_modified[, 4:ncol(metabolomics_data_modified)], as.numeric)
 
@@ -146,78 +226,23 @@ metabolomics_data_modified_var <- metabolomics_data_modified %>%
 metabolomics_sign_met <- metabolomics_data_modified %>% 
   select(ID_Condition, sign_met)
 
-
-
-# Merge lipidomics and metabolomics data ----------------------------------
-lip_met_merge_data_entries <- rbind(met_info, lip_info)
-
-# Note: Make function out of this
-# Check for duplicates in HMDB
-n_occur_hmdb <- data.frame(table(lip_met_merge_data_entries$HMDB_ID))
-n_occur_hmdb[n_occur_hmdb$Freq > 1,]
-dupl_hmdb <- lip_met_merge_data_entries[lip_met_merge_data_entries$HMDB_ID %in% n_occur_hmdb$Var1[n_occur_hmdb$Freq > 1],]
-
-# Remove one of the duplicate entries
-dat <- dupl_hmdb$HMDB_ID
-toDelete <- seq(1, length(dat), 2)
-toDelete <- dupl_hmdb[-toDelete, ]
-lip_met_merge_data_entries <- lip_met_merge_data_entries %>% 
-  filter(!Biochemicals %in% toDelete$Biochemicals)
-
-# Remove biochemical if no KEGG or HMDB entry
-lip_met_merge_data_entries <- lip_met_merge_data_entries[rowSums(is.na(lip_met_merge_data_entries[,2:3])) != ncol(lip_met_merge_data_entries[,2:3]), ]
-
-# Merge the two data frames
-lip_met_merge_data_var <- merge(x = lipidomics_data_modified_var, 
-                            y = metabolomics_data_modified_var,
-                            by = "ID_Condition",
-                            all.x = TRUE) 
-  
-# Data which have a KEGG entry, HMDB entry or both
-lip_met_merge_data_clean <- lip_met_merge_data_var[colnames(lip_met_merge_data_var) %in% lip_met_merge_data_entries$Biochemicals] %>% 
-  mutate(ID_Condition = lip_met_merge_data$ID_Condition, 
-         Condition = lip_met_merge_data$Condition.x, 
-         Gender = lip_met_merge_data$GENDER) %>% 
-  select(ID_Condition, Condition, Gender, everything())
-
   
 
 # Save data to csv  -------------------------------------------
 lipidomics_data_modified_var %>% 
   write_csv("data/02_lipidomics_data_tidy.csv")
 
-lip_info %>% 
-  filter(Biochemicals %in% nzv_lipids$Biochemicals) %>% 
+lip_info_without_nzv %>% 
   write_csv("data/02_lipidomics_data_info.csv")
 
 metabolomics_data_modified_var %>% 
   write_csv("data/02_metabolomics_data_tidy.csv")
 
-metabolomics_sign_met %>% 
-  write_csv("data/02_metabolomics_sign_metabolites.csv")
-
 met_info %>% 
   write_csv("data/02_metabolomics_data_info.csv")
 
-lip_met_merge_data_clean %>% 
-  write_csv("data/02_metabolomics_lipidomics_data_tidy.csv")
+metabolomics_sign_met %>% 
+  write_csv("data/02_metabolomics_sign_metabolites.csv")
 
-lip_met_merge_data_entries %>% 
-  write_csv("data/02_metabolomics_lipidomics_data_info.csv")
-
-clinical_data_modified %>% 
+clinical_data_modified_encoded %>% 
   write_csv("data/02_clinical_data_tidy.csv")
-
-
-
-
-
-
-
-# Lipid class concentration -----------------------------------------------
-### slet evt.
-xxxx <- aggregate(lipidomics_data_modified[, 4:ncol(lipidomics_data_modified)], 
-                  list(lipidomics_data_modified$Condition), 
-                  mean) %>% 
-  t(.) %>% 
-  merge(x = ., y = lip_info, by = intersect(rownames(.), lip_info$Biochemicals))

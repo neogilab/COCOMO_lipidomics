@@ -1,6 +1,6 @@
 ##########################################################
 # Script connecting all results of significant lipids
-# from the different analysis methods
+# From the different analysis methods used for lipidomics
 ##########################################################
 
 # Clear workspace
@@ -10,24 +10,20 @@ rm(list = ls())
 library(UpSetR)
 library(RVenn)
 library(tidyverse)
-library(broom)
-library(RColorBrewer)
-library(matrixStats)
-library(dendextend)
-library(gplots)
 
-# Load lists from files (03_univariate_analysis.R and 05_supervised_analysis.R)
-load("data/05_methods_supervised.RData")
-load("data/06_methods_univariate.RData")
-
-# Load lipidomics data 
+# Load data 
 lipidomics_data_tidy <- read_csv("data/02_lipidomics_data_tidy.csv") %>% filter(!str_detect(Condition, "Ctrl"))
 
-# Concatenate imported lists
+# Load significant lipid lists from supervised + univariate methods
+load("data/05_methods_supervised.RData")
+load("data/06_methods_univariate.RData")
 method_list <- c(method_list_univariate, method_list_supervised)
 
-# UpsetR plot showing the intersection of lipids across the different methods
-png("results/07_comparison_of_analyses.png",
+
+
+# UpSet plot ------------------------------------------------------
+# Plot showing the number of intersection lipids across the different methods
+png("results/07_1_Upset_comparison_of_analyses.png",
     width = 5*300,        # 5 x 300 pixels
     height = 5*300,
     res = 300,            # 300 pixels per inch
@@ -41,20 +37,20 @@ upset(data = fromList(method_list),
 dev.off()
 
 
-# Consensus of significant lipids ------------------------------------------------------
+
+# Intersection lipids -> key lipids ------------------------------------------------------
 method_list <- Venn(method_list)
 
-# Venn diagram of the supervised methods
-ggvenn(method_list, slice = c(1,2,3))
-
-## Intersection of: '`Random Forest with "MUVR"`', '`PLS-DA with "ropls"`', '`Limma test with "limma"`' and '`Mann Whitney U Test`'
+# Intersection of: '`Random Forest with "MUVR"`', '`PLS-DA with "ropls"`', '`Limma test with "limma"`' and '`Mann Whitney U Test`'
 intersection <- overlap(method_list, c(1, 2, 3, 4))
 
 # Save list to a file
 intersection_list_sig_lipids <- list('Significant lipids' = intersection)
 save(intersection_list_sig_lipids, file="data/07_significant_lipids.RData")
 
-# Distribution boxplot of significant lipids ------------------------------------------------------------
+
+
+# Distribution boxplot of key lipids ------------------------------------------------------------
 # Pivot data frame 
 pivot_lipidomics_data_tidy <- lipidomics_data_tidy %>% 
   pivot_longer(cols = -c(Condition, GENDER, ID_Condition), 
@@ -66,26 +62,21 @@ pivot_lipidomics_data_tidy$Condition <- factor(pivot_lipidomics_data_tidy$Condit
 
 # Boxplot of significant lipids
 sign_lipids_plot <- pivot_lipidomics_data_tidy %>% 
-  filter(Lipid %in% intersection) %>% #, !Condition == "Ctrl") %>% 
+  filter(Lipid %in% intersection) %>%
   ggplot(mapping = aes(x = log2(Concentrations), fill = Condition)) + 
   geom_boxplot(alpha = 0.5) + 
   coord_flip() + 
-  labs(title = 'Boxplot of lipid concentration', 
-       subtitle = 'Significant lipids',
-       x = 'Log2 of lipid concentrations') + 
+  labs(x = 'Log2 of lipid concentrations') + 
   scale_fill_discrete(name="Condition") +   
   facet_wrap(~ Lipid) +
   scale_fill_manual(values = c("#32CD32", "#6495ED"))  # (Green, Blue)
+ggsave("results/07_2_boxplot_significant_lipids.png", plot = sign_lipids_plot, device = "png", height = 8)
 
-
-sign_lipids_plot
-ggsave("results/07_boxplot_significant_lipids.png", plot = sign_lipids_plot, device = "png", height = 8)
 
 
 # PCA of significant lipids ---------------------------
 # Remove the Ctrl from the data set and extract the consensus lipids found above
 lipidomics_data_tidy_sign <- lipidomics_data_tidy %>% 
-#  filter(!str_detect(ID_Condition, "Ctrl")) %>% 
   select(ID_Condition, Condition, GENDER, intersection) 
 
 # Log2 transform data
@@ -128,7 +119,6 @@ y <- data_pca_tidy %>%
   pull(percent)
 y <- str_c("PC2 (", round(y*100, 2), "%)")
 
-
 # Reorder the conditions order
 data_pca_aug$Condition <- factor(data_pca_aug$Condition , levels=c("Ctrl", "HIV_NoMetS", "HIV_MetS"))
 
@@ -138,18 +128,14 @@ pca_condition <- data_pca_aug %>%
              y = .fittedPC2,
              colour = Condition)) + 
   geom_point(size = 3, alpha = 0.5) + 
-  labs(x = x, y = y, title = "PCA", 
-       subtitle = "Significant lipids",
-       color = "Condition") +
+  labs(x = x, y = y, color = "Condition") +
   scale_color_manual(values = c("#32CD32", "#6495ED")) + # (Green, Blue, Red - "#FA8072")
   stat_ellipse(level = 0.9)
-pca_condition
-ggsave("results/07_pca_significant_lipids.png", plot = pca_condition, device = "png", width = 6.17, height = 3.1)
+ggsave("results/07_3_pca_significant_lipids.png", plot = pca_condition, device = "png", width = 6.17, height = 3.1)
+
 
 
 # Heatmap & pairwise alignment of significant lipids ----------------------------------------------
-# Look in Jupyter notebook in Python folder "07_consensus_analysis"
-
 zscore <- function(x) {
   (x-mean(x))/sd(x)
 }
@@ -159,39 +145,25 @@ lipid_sign_zscore <- cbind(lipidomics_data_tidy_sign[1:3],lapply(lipidomics_data
 
 # Average of z scores for hivnomets and hivmets
 samples <- colnames(lipid_sign_zscore[4:ncol(lipid_sign_zscore)])
+
 lipid_sign_zscore_avg <- lipid_sign_zscore %>% 
   select(Condition, everything(), -c("ID_Condition", "GENDER")) %>% 
   group_by(Condition) %>% 
   summarise_at(samples, mean, na.rm = TRUE) %>% 
   pivot_longer(-Condition) %>% 
-  pivot_wider(names_from=Condition, values_from=value) 
+  pivot_wider(names_from=Condition, values_from=value) %>% 
+  rename(`Key Lipids` = name) %>% 
+  pivot_longer(!`Key Lipids`, names_to = "Condition", values_to = "Concentrations")
 
-# Add rownames and colnames to data frame
-lipnames <- lipid_sign_zscore_avg$name
-lipid_sign_zscore_avg <- as.matrix.data.frame(lipid_sign_zscore_avg[, 2:3])
-rownames(lipid_sign_zscore_avg) <- lipnames
+# Create heatmap
+heatmapplot <- lipid_sign_zscore_avg %>% 
+  ggplot(aes(x = factor(Condition, level = c("HIV_NoMetS", "HIV_MetS")), y = `Key Lipids`, fill = Concentrations)) +
+  geom_tile() + 
+  labs(x = "Conditions", y = "Key lipids")#, title = "Heatmap of mean log2 concentrations")
+ggsave("results/07_4_heatmap_significant_lipids.png", plot = heatmapplot, device = "png", width = 6, height = 3)
 
-# Heatmap
-hmcol <- colorRampPalette(brewer.pal(9, "GnBu"))(200)
-png("results/07_heatmap_significant_lipids.png",            
-    width = 10*300,        # 5 x 300 pixels
-    height = 10*300,
-    res = 300,            # 300 pixels per inch
-    pointsize = 8)        # font size)      
-heatmap.2(as.matrix(lipid_sign_zscore_avg),
-          col = hmcol, 
-          main = "Heatmap of significant lipids", # heat map title
-          density.info="none",  # turns off density plot inside color legend
-          trace="none",         # turns off trace lines inside the heat map
-          margins =c(12,9),     # widens margins around plot
-          dendrogram="none",     # only draw a row dendrogram
-          linecol = "both",
-          Colv=TRUE,
-          srtCol=0, adjCol = c(1,1))
-dev.off()
 
 
 # Save file with significant lipids ---------------------------------------
 as_tibble(intersection_list_sig_lipids) %>% 
   write_csv("data/07_sign_lipids.csv")
-

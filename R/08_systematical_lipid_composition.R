@@ -1,3 +1,8 @@
+##########################################################
+# Script identifying the trends in the systamtical 
+# Composition of the lipids from lipidomics data 
+##########################################################
+
 # Clear workspace
 rm(list = ls())
 
@@ -11,13 +16,9 @@ lipidomics_data_tidy <- read_csv("data/02_lipidomics_data_tidy.csv") %>%
                            Condition == "HIV_MetS" ~ "HIV_MetS")) %>% 
   select(Group, everything(), -c("GENDER","ID_Condition", "Condition")) 
 
-# Change TAG names to accomodate the lipidomR function "map_lipid_names", insert paranthesis
-##col_names_1 <- gsub("\\S[A-Z]*[0-9]*\\S[0-9]$", "", colnames(lipidomics_data_tidy))
-##col_names_2 <- gsub('^(TAG)(.*)$', '\\1(\\2)', col_names_1)
 
-col_names <- gsub('^(TAG)([0-9]*\\S[0-9]*)(\\SFA)([0-9]*\\S[0-9]*)$', '\\1(\\2)\\3(\\4)', colnames(lipidomics_data_tidy))
-colnames(lipidomics_data_tidy) <- col_names
 
+# Limma model -----------------------------------------------------------------
 # List of lipid names
 lip_names <- colnames(lipidomics_data_tidy[,2:ncol(lipidomics_data_tidy)])
 
@@ -31,20 +32,10 @@ result.limma <-
     dependent.variables = names.mapping$"Name",
     independent.variables = c("Group"))
 
-figure.output <-
-  heatmap_lipidome_from_limma(
-    x = result.limma$"model",
-    names.mapping = names.mapping,
-    axis.x.carbons = FALSE,
-    class.facet = "row",
-    plot.all = TRUE,
-    plot.individual = FALSE,
-    print.figure = TRUE,
-    scales = "free",
-    space = "free"
-  )
 
-# Create factor-specific figures.
+
+# Heatmap of lipid classes -----------------------------------------------------------------
+# Create factor-specific figures
 figure.output <-
   heatmap_lipidome_from_limma(
     x = result.limma$"model",
@@ -59,6 +50,5 @@ figure.output <-
     space = "free"
   )
 
-# Print the figure of differences between ConditionHIV_NoMetS and ConditionHIV_MetS.
-print( figure.output[[ "GroupHIV_MetS" ]] )
-
+# Save the figure of differences between Condition[HIV_NoMet/HIV_MetS]
+ggsave("results/08_heatmaps_lipidomeR.png", plot = figure.output[[ "GroupHIV_MetS" ]], device = "png", height = 11) #, width = 6.17,
